@@ -23,15 +23,6 @@
 #include <chrono>
 #include <ctime>
 
-#if defined(_MSC_VER)
-// Visual Studio version of 128-bit support
-#include <intrin.h>
-#pragma intrinsic(_umul128)
-#else
-//  GCC version of 128-bit support
-typedef unsigned int uint128_t __attribute__((mode(TI)));
-#endif
-
 using namespace std;
 
 /// <summary> Used for debugging.  Designed to remain active in production version.
@@ -68,144 +59,12 @@ static chrono::system_clock::time_point start{};
 
 //-------------------------------------------------------------------
 
-#if defined(_MSC_VER)
-
-static const double two64 = pow(2.0, 64);
-
-struct uint128_t
-{
-    uint64_t    m_lo;
-    uint64_t    m_hi;
-
-    uint128_t()
-    {
-        m_lo = 0;
-        m_hi = 0;
-    }
-
-    uint128_t(uint64_t lo) : m_lo(lo), m_hi(0)
-    {}
-
-    uint128_t(uint64_t lo, uint64_t hi) : m_lo(lo), m_hi(hi)
-    {}
-
-    uint128_t(const uint128_t& a) : m_lo(a.m_lo), m_hi(a.m_hi)
-    {}
-
-    uint64_t operator& (uint64_t a) const { return m_lo & a; }
-
-    void operator=(const uint128_t& a)
-    {
-        m_lo = a.m_lo;
-        m_hi = a.m_hi;
-    }
-
-    /// <summary> this == a
-    /// </summary>
-    bool operator==(const uint128_t& a) const
-    {
-        return (m_hi == a.m_hi) && (m_lo == a.m_lo);
-    }
-
-    /// <summary> this < a
-    /// </summary>
-    bool operator<(const uint128_t& a) const
-    {
-        return (m_hi < a.m_hi)
-            || ((m_hi == a.m_hi) && (m_lo < a.m_lo));
-    }
-
-    /// <summary> this <= a
-    /// </summary>
-    bool operator<=(const uint128_t& a) const
-    {
-        return (m_hi < a.m_hi)
-            || ((m_hi == a.m_hi) && (m_lo <= a.m_lo));
-    }
-
-    /// <summary> this + a
-    /// </summary>
-    uint128_t operator+(const uint64_t& a) const
-    {
-        uint128_t result;
-        result.m_lo = m_lo + a;
-        result.m_hi += (result.m_lo < m_lo) ? 1 : 0;
-        return result;
-    }
-
-    /// <summary> this + a
-    /// </summary>
-    uint128_t operator-(const uint128_t& a) const
-    {
-        uint128_t result;
-        result.m_lo = m_lo - a.m_lo;
-        result.m_hi -= a.m_hi + (m_lo < result.m_lo) ? 1 : 0;
-        return result;
-    }
-
-    /// <summary> this >> a
-    /// </summary>
-    uint128_t operator>>(unsigned a) const
-    {
-        uint128_t result{ m_lo, m_hi };
-        while (64 <= a)
-        {
-            result.m_lo = result.m_hi;
-            result.m_hi = 0;
-            a -= 64;
-        }
-        result.m_lo = (result.m_hi << (64 - a)) | (result.m_lo >> a);
-        result.m_hi = result.m_hi >> a;
-        return result;
-    }
-
-    /// <summary> this << a
-    /// </summary>
-    uint128_t operator<<(unsigned a) const
-    {
-        uint128_t result{ m_lo, m_hi };
-        while (64 <= a)
-        {
-            result.m_hi = m_lo;
-            result.m_lo = 0;
-            a -= 64;
-        }
-        result.m_hi = (m_lo >> (64 - a)) | (m_hi << a);
-        result.m_lo = result.m_lo << a;
-        return result;
-    }
-
-    /// <summary> this * a
-    /// </summary>
-    uint128_t operator*(const uint64_t& a) const
-    {
-        uint64_t temp;
-        uint128_t result{ _umul128(m_lo, a, &temp), m_hi * a };
-        result.m_hi += temp;
-
-        return result;
-    }
-
-    /// <summary> double precision is good enough
-    ///    to identify any root >= cube of a number up to saturatedValue
-    /// </summary>
-    double Log10()
-    {
-        auto temp = (two64 * (double)m_hi) + m_lo;
-
-        return log10(temp);
-    }
-};
-
-const uint128_t saturatedValue{ (UINT64_MAX << 56), (UINT64_MAX >> 8) };
-#else
-const uint128_t saturatedValue = UINT64_MAX << 56;
-#endif
+const uint64_t saturatedValue{ (UINT64_MAX >> 8) };
 
 // Keep track of powers in a structure recording the base, the power, and the 80-bit value.
 struct PowerTerm
 {
-    uint128_t   m_value;
+    uint64_t    m_value;
     uint32_t    m_base;
     uint8_t     m_power;
 
@@ -229,8 +88,7 @@ struct PowerTerm
     /// </summary>
     void UPow(uint64_t base, unsigned power)
     {
-        //  GCC version of 128-bit support
-        uint128_t result = base;
+        uint64_t result = base;
         if ((power * log10(base)) < 37)
         {
             while ((0 < --power))
@@ -243,29 +101,11 @@ struct PowerTerm
             m_value = saturatedValue;
     }
 
-#if defined(_MSC_VER)
-    double Log10()
-    {
-        auto temp = (double)m_value.m_hi;
-        temp *= (1ull << 32);
-        temp *= (1ull << 32);
-        temp += m_value.m_lo;
-
-        return log10(temp);
-    }
-#else
-    double Log10()
-    {
-        double temp = m_value;
-        return log10(temp);
-    }
-#endif
-
     /// <summary> construct from minimal information
     /// </summary>
-    PowerTerm(uint128_t& value, uint8_t power) : m_value(value), m_power(power)
+    PowerTerm(uint64_t& value, uint8_t power) : m_value(value), m_power(power)
     {
-        auto l10 = Log10();
+        auto l10 = log10(m_value);
 
         m_base = (uint32_t)round(pow(10, l10 / power));
 
@@ -279,7 +119,7 @@ struct PowerTerm
 /// <summary> An ordered list of the first integer powers is central to this exhaustive search.
 /// The list will exclude duplicates, keeping only the version with the smallest base.
 /// </summary>
-static vector<uint128_t> valuesInOrder{};
+static vector<uint64_t> valuesInOrder{};
 
 /// <summary> The base can be reconstructed from the value and the power, minimizing memory use for the vectors.
 /// </summary>
@@ -322,7 +162,7 @@ void Initialize(unsigned numberOfTerms)
 
     // the PwerTerm ordering function sorts for minimum base, when value is duplicate.
 
-    uint128_t prior = 0;
+    uint64_t prior = 0;
 
     while (valuesInOrder.size() < maxTerms)
     {
@@ -344,7 +184,7 @@ void Initialize(unsigned numberOfTerms)
     x.m_base = 0;  // not used for Log10
     x.m_power = powersInOrder[maxTerms - 1];
     x.m_value = valuesInOrder[maxTerms - 1];
-    std::cout << (x.Log10()) << " log10 of highest power in the list\n";
+    std::cout << log10(x.m_value) << " log10 of highest power in the list\n";
 }
 
 /// <summary> locate the value the list
@@ -354,7 +194,7 @@ void Initialize(unsigned numberOfTerms)
 /// <param name="final"> Index definitely higher than any possible match </param>
 /// <returns> Index of a value <= the sought value </returns>
 /// 
-inline unsigned LocateMatch(uint128_t value, unsigned ground, unsigned sky)
+inline unsigned LocateMatch(uint64_t value, unsigned ground, unsigned sky)
 {
     // most searches are far left of list
 
@@ -437,7 +277,7 @@ static std::mutex safeOutput{};
 /// </summary>
 void SearchForBealNearestMisses()
 {
-    uint128_t upperBj = valuesInOrder[maxTerms - 1] >> 1;
+    auto upperBj = valuesInOrder[maxTerms - 1] >> 1;
 
     for (unsigned j = J.fetch_add(1); valuesInOrder[j] < upperBj; j = J.fetch_add(1))
     {
@@ -445,18 +285,18 @@ void SearchForBealNearestMisses()
 
         uint32_t localTrials = 0;
 
-        uint128_t bestDif = B;
+        uint64_t bestDif = B;
         unsigned bestI = 0;
         unsigned bestK = 0;
 
-        uint128_t upperCk = (B << 1);
+        uint64_t upperCk = (B << 1);
         unsigned iGround = 0;
         for (unsigned k = j + 1; valuesInOrder[k] <= upperCk; ++k)
         {
             auto& C = valuesInOrder[k];
 
             ++localTrials;
-            uint128_t Agoal = C - B;
+            uint64_t Agoal = C - B;
 
             iGround = LocateMatch(Agoal, iGround, j + 1);
             auto& Alow = valuesInOrder[iGround];
@@ -483,28 +323,27 @@ void SearchForBealNearestMisses()
         if (bestDif < B)
         {
             auto zeros = nearestCount.fetch_add(1);
-            auto& A = valuesInOrder[bestI];
             auto& C = valuesInOrder[bestK];
+            auto Aideal = C - B;
 
-            auto Afull = PowerTerm(A, powersInOrder[bestI]);
             auto Bfull = PowerTerm(B, powersInOrder[j]);
             auto Cfull = PowerTerm(C, powersInOrder[bestK]);
 
-            auto baseGCD = GCD(GCD(Afull.m_base, Bfull.m_base), Cfull.m_base);
+            auto baseGCD = GCD(Bfull.m_base, Cfull.m_base);
 
-            auto AiL10 = Afull.Log10();
-            auto BjL10 = Bfull.Log10();
+            auto AiL10 = log10(Aideal);
+            auto BjL10 = log10(B);
 
             safeOutput.lock();
 
             std::cout << (zeros + 1)
                 << ", " << AiL10
                 << ", " << BjL10
-                << ", " << Afull.m_base << ", " << (unsigned)Afull.m_power
+                << ", " << Aideal
                 << ", " << Bfull.m_base << ", " << (unsigned)Bfull.m_power
                 << ", " << Cfull.m_base << ", " << (unsigned)Cfull.m_power
-                << ", " << (bestDif & (~(0ull)))
                 << ", " << baseGCD
+                << ", " << bestDif
                 << dec << endl;
 
             safeOutput.unlock();
@@ -524,28 +363,6 @@ void Usage()
     cout << "     You will obtain about 80% MaxTerms results, one for each B^j tried\n";
 
     exit(EXIT_FAILURE);
-}
-
-/// <summary> use power to approximate a big number
-/// </summary>
-uint128_t str_to_uint128(const char* str)
-{
-    stringstream ss(str);
-    double log10input;
-    ss >> log10input;
-    auto tens = (unsigned)floor(log10input);
-    auto mantissa = (unsigned)floor(1024 * pow(10.0, log10input - tens));
-
-    Assert(tens < 36, "big numbers limited to < 10^37");
-
-    uint128_t result = 1;
-
-    while (0 < tens)
-    {
-        result = result * 10;
-    }
-    result = result * mantissa;
-    return result >> 10;
 }
 
 /// <summary> use double to enable exponential notation like "1e6"
@@ -593,33 +410,10 @@ int main(
 
     J = 0;
 
-#define NO_THREADS 1
-#ifdef NO_THREADS	// recommend no threads if you need to debug code
     std::cout << "*** concurrency supressed ***\n";
-    std::cout << "nearest miss, log10(A^i), log10(B^j), A, i, B, j, C, k, dif, GCD(A B C)\n";
+    std::cout << "nearest miss, log10(A^i), log10(B^j), (C^k - B^j), B, j, C, k, GCD(A B C), dif\n";
 
     SearchForBealNearestMisses();
-#else
-// hardware concurrency is normally implemented as the number of virtual cores directly implemented by the CPU.
-
-    unsigned concurrency = std::thread::hardware_concurrency();
-    cout << "hardware concurrency: " << concurrency << endl;
-
-    std::cout << "nearest miss, log10(A^i), log10(B^j), A, i, B, j, C, k, dif, GCD(A B C)\n";
-
-    vector<thread*> threads = {};
-
-    for (unsigned t = 0; t < concurrency; ++t)
-    {
-        threads.push_back(new std::thread(SearchForBealNearestMisses));
-    }
-
-    // wait for the threads to finish
-
-    for (auto th : threads)
-        th->join();
-
-#endif
     auto end = chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
 
