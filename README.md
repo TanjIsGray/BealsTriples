@@ -15,6 +15,6 @@ As an example of some simple manipulations you can do with these, you could sort
 
 You can do other things like looking for sequential solutions which have neighboring GCD values.  There are quite a few of these.
 
-Finally, I added a separate, simple program which scans for the nearest misses - when there is no exact solution for a specific B^j, what was the A^i, C^j combination which came closest to equality?  The fun thing here is that about 80% of these results are mutually prime - even though not a single one of the exact results is mutually prime.  This is a simple way to show how amazing the GCD property of the exact triples really is.
+Finally, I added a separate, simple program which scans for the nearest misses - when there is no exact solution for a specific B^j, what was the A^i, C^j combination which came closest to equality?  The fun thing here is that about 60% of these near-miss results are mutually prime - even though not a single one of the exact results is mutually prime.  This is a simple way to show how amazing the GCD property of the exact triples really is.
 
 Have fun, and don't go too far down the rabbit-hole spending time on this conjecture!
