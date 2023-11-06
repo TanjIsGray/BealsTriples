@@ -1,8 +1,6 @@
-// Beal64.cpp : Search for Beal's triples within a total compatible with 128-bit unsigned
+// Beal64.cpp : Search for Beal's triples within a total compatible with 64-bit unsigned
 // 
 // Copyright (c) 2023, Avant-Gray LLC, WA USA
-// Released Sept 2023 as-is, with no warranty of fitness for any purpose,
-//      by Avant-Gray LLC to GitHub under Apache v.2 license
 
 // C++ standard libraries
 
@@ -26,7 +24,7 @@
 #include <ctime>
 
 #if defined(_MSC_VER)
-// Visual Studio version of 128-bit support (minimal, see custom type below)
+// Visual Studio version of 128-bit support
 #include <intrin.h>
 #pragma intrinsic(_umul128)
 #else
@@ -36,7 +34,7 @@
 
 using namespace std;
 
-/// <summary> Used for debugging.  Designed to remain active in release version.
+/// <summary> Used for debugging.  Designed to remain active in production version.
 /// </summary>
 void Assert(bool constraint, const char* reason)
 {
@@ -76,52 +74,40 @@ static chrono::system_clock::time_point start {};
 
 static const double two64 = pow(2.0, 64);
 
-/// <summary> This is not a complete implementation of uint128_t.  Just enough for our needs here.
-/// </summary>
 struct uint128_t
 {
     uint64_t    m_lo;
     uint64_t    m_hi;
 
-    /// <summary> Default constructor
-    /// </summary>
     uint128_t()
     {
         m_lo = 0;
         m_hi = 0;
     }
 
-    /// <summary> Construct from a 64-bit (or smaller) unsigned int
-    /// </summary>
     uint128_t(uint64_t lo) : m_lo(lo), m_hi(0)
     {}
 
-    /// <summary> Construct all 128-bits from two 64-bit unsigned ints
-    /// </summary>
     uint128_t(uint64_t lo, uint64_t hi) : m_lo(lo), m_hi(hi)
     {}
 
-    /// <summary> Copy-constructor
-    /// </summary>
     uint128_t(const uint128_t& a) : m_lo(a.m_lo), m_hi(a.m_hi)
     {}
 
-    /// <summary> Assignment operator
-    /// </summary>
     void operator=(const uint128_t& a)
     {
         m_lo = a.m_lo;
         m_hi = a.m_hi;
     }
 
-    /// <summary> Equality operator: this == a
+    /// <summary> this == a
     /// </summary>
     bool operator==(const uint128_t& a) const
     {
         return (m_hi == a.m_hi) && (m_lo == a.m_lo);
     }
 
-    /// <summary> less-than operator: this < a
+    /// <summary> this < a
     /// </summary>
     bool operator<(const uint128_t& a) const
     {
@@ -129,7 +115,7 @@ struct uint128_t
             || ((m_hi == a.m_hi) && (m_lo < a.m_lo));
     }
 
-    /// <summary> Less-than-or-equal operator: this <= a
+    /// <summary> this <= a
     /// </summary>
     bool operator<=(const uint128_t& a) const
     {
@@ -137,7 +123,7 @@ struct uint128_t
             || ((m_hi == a.m_hi) && (m_lo <= a.m_lo));
     }
 
-    /// <summary> Addition operator: this + a
+    /// <summary> this + a
     /// </summary>
     uint128_t operator+(const uint64_t& a) const
     {
@@ -147,7 +133,7 @@ struct uint128_t
         return result;
     }
 
-    /// <summary> subtraction operator: this - a
+    /// <summary> this + a
     /// </summary>
     uint128_t operator-(const uint128_t& a) const
     {
@@ -157,7 +143,7 @@ struct uint128_t
         return result;
     }
 
-    /// <summary> shift-right operator: this >> a
+    /// <summary> this >> a
     /// </summary>
     uint128_t operator>>(unsigned a) const
     {
@@ -173,7 +159,7 @@ struct uint128_t
         return result;
     }
 
-    /// <summary> shift-left operator: this << a
+    /// <summary> this << a
     /// </summary>
     uint128_t operator<<(unsigned a) const
     {
@@ -189,7 +175,7 @@ struct uint128_t
         return result;
     }
 
-    /// <summary> multiply opearator, up to 64-bits: this * a
+    /// <summary> this * a
     /// </summary>
     uint128_t operator*(const uint64_t& a) const
     {
@@ -211,16 +197,12 @@ struct uint128_t
     }
 };
 
-
-// the saturated value is used to stop arithmetic safely some distance below overflow
-
 const uint128_t saturatedValue{ (UINT64_MAX << 56), (UINT64_MAX >> 8) };
 #else
 const uint128_t saturatedValue = ((uint128_t) UINT64_MAX) << 56;
 #endif
 
-/// <summary> Keep track of powers in a structure recording the base, the power, and the 80-bit value.
-/// </summary>
+// Keep track of powers in a structure recording the base, the power, and the 80-bit value.
 struct PowerTerm
 {
     uint128_t   m_value;
@@ -512,14 +494,14 @@ void SearchForBeal()
 /// </summary>
 void Usage()
 {
-    std::cout << "usage: Beal64 maxTerms log10(Bj)resume\n";
+    std::cout << "usage: Beal64 maxTerms log10(Bj)resume skipEasyPrimes\n";
     std::cout << "              unsigned                                  see recommendations, below\n";
     std::cout << "                       0 begin at start                 or use output value from a prior run\n";
     std::cout << "  recommendations:\n";
     std::cout << "     1e6 terms will find 1519 triples in a couple of minutes on  on an 8-core Icelake\n";
     std::cout << "     1e7 terms will deliver the first 4.8 thousand Beal triples in a few hours\n";
-    std::cout << "     1e8 terms will run for about 10 days on an 8 core IceLake at 2.3 GHz\n";
-    std::cout << "     regardless of the resume value, the last Bj term tried will stay the same\n";
+    std::cout << "     1e8 terms will run for days\n";
+    std::cout << "     the maxTerms will not be affected by where you resume, the last Bj term tried will stay the same\n";
 
     exit(EXIT_FAILURE);
 }
@@ -602,7 +584,7 @@ int main(
 
 //#define NO_THREADS 1
 #ifdef NO_THREADS	// recommend no threads if you need to debug code
-    std::cout << "*** concurrency supressed ***\n";
+    std::cout << "*** concurrency supressed for debugging";
     std::cout << "trials, zeros, log10(A^i), log10(B^j), A, i, B, j, C, k, GCD(A B C)\n";
 
     SearchForBeal();
